@@ -1,0 +1,125 @@
+name: Relay
+
+on:
+  workflow_dispatch:
+    inputs:
+      leg_seconds:
+        description: "Seconds to run each leg"
+        required: false
+        default: 60
+        type: number
+      checkpoint_every:
+        description: "Seconds between checkpoints"
+        required: false
+        default: 20
+        type: number
+  schedule:
+    - cron: "0 1 * * *"
+
+jobs:
+  leg1:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run leg 1
+        env:
+          DATA_TOKEN: ${{ secrets.DATA_TOKEN }}
+          LEG: "1"
+          LEG_SECONDS: ${{ inputs.leg_seconds || 60 }}
+          CHECKPOINT_EVERY: ${{ inputs.checkpoint_every || 20 }}
+        run: |
+          set -euo pipefail
+          git config --global user.name "relay-frame"
+          git config --global user.email "relay-frame@users.noreply.github.com"
+          git clone "https://x-access-token:${DATA_TOKEN}@github.com/fruitcusp/house-data.git" data
+          cd data
+          mkdir -p state units
+          if [ ! -f state/state.json ]; then printf '{"units":0}\n' > state/state.json; fi
+          UNITS_BEFORE=$(python3 -c "import json; print(json.load(open('state/state.json')).get('units', 0))")
+          NEXT_UNIT=$((UNITS_BEFORE + 1))
+          START=$(date +%s)
+          ELAPSED=0
+          UNITS_DONE=0
+          while [ "$ELAPSED" -lt "$LEG_SECONDS" ]; do
+            sleep "$CHECKPOINT_EVERY"
+            TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+            printf '%s\n' "$NEXT_UNIT" > "units/unit-$NEXT_UNIT.txt"
+            echo "unit $NEXT_UNIT leg $LEG $TS" >> state/progress.txt
+            NEXT_UNIT=$((NEXT_UNIT + 1))
+            UNITS_DONE=$((UNITS_DONE + 1))
+            ELAPSED=$(( $(date +%s) - START ))
+            python3 -c "import json; d=json.load(open('state/state.json')); d['units']=$((UNITS_BEFORE + UNITS_DONE)); d['next_unit']=$NEXT_UNIT; json.dump(d, open('state/state.json','w'))"
+            git add state/state.json state/progress.txt units
+            if git diff --cached --quiet; then echo "no changes to checkpoint"; else git commit -m "checkpoint leg$LEG unit $((NEXT_UNIT - 1))"; git push origin HEAD:main; fi
+          done
+          UNITS_AFTER=$((UNITS_BEFORE + UNITS_DONE))
+          echo "LEG=$LEG UNITS_BEFORE=$UNITS_BEFORE UNITS_DONE=$UNITS_DONE UNITS_AFTER=$UNITS_AFTER NEXT_UNIT=$NEXT_UNIT"
+  leg2:
+    needs: leg1
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run leg 2
+        env:
+          DATA_TOKEN: ${{ secrets.DATA_TOKEN }}
+          LEG: "2"
+          LEG_SECONDS: ${{ inputs.leg_seconds || 60 }}
+          CHECKPOINT_EVERY: ${{ inputs.checkpoint_every || 20 }}
+        run: |
+          set -euo pipefail
+          git config --global user.name "relay-frame"
+          git config --global user.email "relay-frame@users.noreply.github.com"
+          git clone "https://x-access-token:${DATA_TOKEN}@github.com/fruitcusp/house-data.git" data
+          cd data
+          mkdir -p state units
+          if [ ! -f state/state.json ]; then printf '{"units":0}\n' > state/state.json; fi
+          UNITS_BEFORE=$(python3 -c "import json; print(json.load(open('state/state.json')).get('units', 0))")
+          NEXT_UNIT=$((UNITS_BEFORE + 1))
+          START=$(date +%s)
+          ELAPSED=0
+          UNITS_DONE=0
+          while [ "$ELAPSED" -lt "$LEG_SECONDS" ]; do
+            sleep "$CHECKPOINT_EVERY"
+            TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+            printf '%s\n' "$NEXT_UNIT" > "units/unit-$NEXT_UNIT.txt"
+            echo "unit $NEXT_UNIT leg $LEG $TS" >> state/progress.txt
+            NEXT_UNIT=$((NEXT_UNIT + 1))
+            UNITS_DONE=$((UNITS_DONE + 1))
+            ELAPSED=$(( $(date +%s) - START ))
+            python3 -c "import json; d=json.load(open('state/state.json')); d['units']=$((UNITS_BEFORE + UNITS_DONE)); d['next_unit']=$NEXT_UNIT; json.dump(d, open('state/state.json','w'))"
+            git add state/state.json state/progress.txt units
+            if git diff --cached --quiet; then echo "no changes to checkpoint"; else git commit -m "checkpoint leg$LEG unit $((NEXT_UNIT - 1))"; git push origin HEAD:main; fi
+          done
+          UNITS_AFTER=$((UNITS_BEFORE + UNITS_DONE))
+          echo "LEG=$LEG UNITS_BEFORE=$UNITS_BEFORE UNITS_DONE=$UNITS_DONE UNITS_AFTER=$UNITS_AFTER NEXT_UNIT=$NEXT_UNIT"
+  finalize:
+    needs: leg2
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify relay
+        env:
+          DATA_TOKEN: ${{ secrets.DATA_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config --global user.name "relay-frame"
+          git config --global user.email "relay-frame@users.noreply.github.com"
+          git clone "https://x-access-token:${DATA_TOKEN}@github.com/fruitcusp/house-data.git" data
+          cd data
+          TOTAL_UNITS=$(find units -maxdepth 1 -name 'unit-*.txt' -type f 2>/dev/null | wc -l)
+          CHECKPOINT_COMMITS=$(git log --oneline --grep='^checkpoint' | wc -l)
+          TOTAL_COMMITS=$(git log --oneline | wc -l)
+          HASH=$(sha256sum state/progress.txt | awk '{print $1}')
+          NUMS=$(for f in units/unit-*.txt; do basename "$f" .txt | sed 's/unit-//'; done | sort -n | tr '\n' ' ')
+          EXPECTED=$(seq 1 "$TOTAL_UNITS" | tr '\n' ' ')
+          PNUMS=$(awk '$1=="unit" {print $2}' state/progress.txt | tr '\n' ' ')
+          CONTENT_OK=1
+          for f in units/unit-*.txt; do n=$(basename "$f" .txt | sed 's/unit-//'); c=$(cat "$f"); if [ "$c" != "$n" ]; then CONTENT_OK=0; fi; done
+          if [ "$TOTAL_UNITS" -gt 0 ] && [ "$NUMS" = "$EXPECTED" ] && [ "$PNUMS" = "$EXPECTED" ] && [ "$CONTENT_OK" = "1" ]; then VERIFY=PASS; else VERIFY=FAIL; fi
+          echo "RELAY_VERIFY=$VERIFY TOTAL_UNITS=$TOTAL_UNITS CHECKPOINT_COMMITS=$CHECKPOINT_COMMITS TOTAL_COMMITS=$TOTAL_COMMITS"
+          mkdir -p ../relay-summary
+          printf 'RELAY_VERIFY=%s\nTOTAL_UNITS=%s\nCHECKPOINT_COMMITS=%s\nTOTAL_COMMITS=%s\nPROGRESS_SHA256=%s\n' "$VERIFY" "$TOTAL_UNITS" "$CHECKPOINT_COMMITS" "$TOTAL_COMMITS" "$HASH" > ../relay-summary/summary.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: relay-summary
+          path: relay-summary/summary.txt
