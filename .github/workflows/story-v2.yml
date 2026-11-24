@@ -83,6 +83,14 @@ jobs:
         with:
           name: prep
           path: work
+      - name: Cache VieNeu
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/huggingface
+            ~/.vieneu
+          key: vieneu-cache-v1
       - name: Install VieNeu
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq espeak-ng ffmpeg libsndfile1
