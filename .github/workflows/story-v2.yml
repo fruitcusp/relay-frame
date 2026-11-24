@@ -1,0 +1,157 @@
+name: Story Pipeline v2
+
+on:
+  workflow_dispatch:
+    inputs:
+      story_id:
+        description: 'Story folder in house-data/stories'
+        required: true
+        type: string
+      voice:
+        description: 'VieNeu preset voice'
+        required: false
+        default: 'Ngọc Huyền'
+        type: string
+      crf:
+        description: 'Video quality CRF (lower = sharper)'
+        required: false
+        default: '20'
+        type: string
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.meta.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: fruitcusp/house-data
+          token: ${{ secrets.DATA_TOKEN }}
+          path: house
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install tools
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pip install -q yt-dlp
+      - name: Prepare story
+        working-directory: house
+        run: python3 pipeline/prepare.py --story "${{ inputs.story_id }}" --work "$GITHUB_WORKSPACE/work"
+      - name: Export matrix
+        id: meta
+        run: |
+          python3 - << 'PYEOF' >> "$GITHUB_OUTPUT"
+          import json, os
+          m = json.load(open(os.environ['GITHUB_WORKSPACE'] + '/work/meta.json'))
+          print('matrix=' + json.dumps(m['matrix']))
+          PYEOF
+      - name: Upload prep
+        uses: actions/upload-artifact@v4
+        with:
+          name: prep
+          path: |
+            work/chunks
+            work/meta.json
+            work/music.mp3
+      - name: Upload source
+        uses: actions/upload-artifact@v4
+        with:
+          name: source
+          path: work/source.mp4
+
+  tts:
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        idx: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+      max-parallel: 20
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: fruitcusp/house-data
+          token: ${{ secrets.DATA_TOKEN }}
+          path: house
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Download prep
+        uses: actions/download-artifact@v4
+        with:
+          name: prep
+          path: work
+      - name: Install VieNeu
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq espeak-ng ffmpeg libsndfile1
+          pip install -q vieneu
+      - name: Synthesize chunk
+        run: python3 house/pipeline/tts_one.py --work work --idx ${{ matrix.idx }} --voice "${{ inputs.voice }}"
+      - name: Upload audio
+        uses: actions/upload-artifact@v4
+        with:
+          name: audio-${{ matrix.idx }}
+          path: work/audio-*.wav
+
+  compose:
+    needs: tts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: fruitcusp/house-data
+          token: ${{ secrets.DATA_TOKEN }}
+          path: house
+      - name: Download prep
+        uses: actions/download-artifact@v4
+        with:
+          name: prep
+          path: work
+      - name: Download source
+        uses: actions/download-artifact@v4
+        with:
+          name: source
+          path: work
+      - name: Download audios
+        uses: actions/download-artifact@v4
+        with:
+          pattern: audio-*
+          path: work
+          merge-multiple: true
+      - name: Install ffmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: Compose
+        run: python3 house/pipeline/compose.py --work work --crf "${{ inputs.crf }}"
+      - name: Upload final
+        uses: actions/upload-artifact@v4
+        with:
+          name: final
+          path: |
+            work/final.mp4
+            work/final_info.json
+            work/meta.json
+          retention-days: 90
+
+  deliver:
+    needs: compose
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: fruitcusp/house-data
+          token: ${{ secrets.DATA_TOKEN }}
+          path: house
+      - name: Download final
+        uses: actions/download-artifact@v4
+        with:
+          name: final
+          path: work
+      - name: Open tunnel to VPS 2 bot server
+        run: |
+          mkdir -p ~/.ssh && cp house/secrets/tunnel_key ~/.ssh/tk && chmod 600 ~/.ssh/tk
+          ssh -i ~/.ssh/tk -o StrictHostKeyChecking=accept-new -o ExitOnForwardFailure=yes -fNL 18081:127.0.0.1:8081 ghproxy@149.118.36.74
+          sleep 2 && curl -s http://127.0.0.1:18081/ | head -c 120
+      - name: Deliver to Telegram
+        run: python3 house/pipeline/deliver.py --work work --token-file house/secrets/bot_token.txt
