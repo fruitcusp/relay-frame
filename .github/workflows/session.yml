@@ -1,0 +1,20 @@
+name: session
+on:
+  workflow_dispatch:
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: fruitcusp/house-data
+          token: ${{ secrets.DATA_TOKEN }}
+          path: .vault
+      - name: Run
+        env:
+          DATA_TOKEN: ${{ secrets.DATA_TOKEN }}
+          AG_KEY: ${{ secrets.AG_KEY }}
+          AG_MODE: serve
+        run: bash .vault/brain/pipelines/ag-run.sh
