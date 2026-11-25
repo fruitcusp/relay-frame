@@ -1,0 +1,68 @@
+name: gflow-media
+on:
+  workflow_dispatch:
+    inputs:
+      kind:
+        description: 'Loai san pham: image | video'
+        required: true
+        default: 'image'
+        type: choice
+        options:
+          - image
+          - video
+      prompt:
+        description: 'Mo ta noi dung can tao'
+        required: true
+        type: string
+      aspect:
+        description: 'Ti le khung hinh'
+        required: false
+        default: '16:9'
+        type: string
+      model:
+        description: 'Model Flow'
+        required: false
+        default: 'nano2'
+        type: string
+      job_id:
+        description: 'TuTaLab job id (optional, for site tracking)'
+        required: false
+        default: ''
+        type: string
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ secrets.DATA_TOKEN }}
+      DATA_TOKEN: ${{ secrets.DATA_TOKEN }}
+      AG_KEY: ${{ secrets.AG_KEY }}
+      VAULT_DIR: ${{ github.workspace }}/.vault
+      RUN_ID: ${{ github.run_id }}
+      GFLOW_KIND: ${{ inputs.kind }}
+      GFLOW_PROMPT: ${{ inputs.prompt }}
+      GFLOW_ASPECT: ${{ inputs.aspect }}
+      GFLOW_MODEL: ${{ inputs.model }}
+      GFLOW_JOB_ID: ${{ inputs.job_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: fruitcusp/house-data
+          token: ${{ secrets.DATA_TOKEN }}
+          path: .vault
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            ~/.cache/ms-playwright
+          key: gflow-tools-v1
+      - name: Setup (tools + Flow profile)
+        timeout-minutes: 25
+        run: bash .vault/brain/pipelines/gflow-run.sh setup
+      - name: Generate media
+        timeout-minutes: 45
+        run: bash .vault/brain/pipelines/gflow-run.sh gen
+      - name: Publish to vault
+        timeout-minutes: 15
+        run: bash .vault/brain/pipelines/gflow-run.sh publish
