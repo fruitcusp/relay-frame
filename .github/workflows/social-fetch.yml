@@ -1,0 +1,39 @@
+name: social-fetch
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "URL TikTok / X / YouTube can lay noi dung"
+        required: true
+        type: string
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout vo (relay-frame)
+        uses: actions/checkout@v4
+
+      - name: Checkout ket (house-data)
+        uses: actions/checkout@v4
+        with:
+          repository: fruitcusp/house-data
+          token: ${{ secrets.DATA_TOKEN }}
+          path: .vault
+
+      - name: Lay noi dung (script trong ket)
+        run: |
+          python3 .vault/brain/pipelines/social-fetch.py "${{ inputs.url }}" result.json || true
+
+      - name: Commit ket qua vao ket
+        run: |
+          mkdir -p .vault/brain/social-out
+          cp result.json ".vault/brain/social-out/${{ github.run_id }}.json"
+          cd .vault
+          git config user.name "social-fetch"
+          git config user.email "social-fetch@localhost"
+          git add "brain/social-out/${{ github.run_id }}.json"
+          git commit -m "social-fetch run ${{ github.run_id }}"
+          git push
