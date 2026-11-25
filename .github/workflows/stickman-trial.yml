@@ -24,7 +24,7 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 220
+    timeout-minutes: 300
     env:
       GH_TOKEN: ${{ secrets.DATA_TOKEN }}
       DATA_TOKEN: ${{ secrets.DATA_TOKEN }}
@@ -46,10 +46,10 @@ jobs:
         timeout-minutes: 30
         run: bash .vault/brain/pipelines/stickman-run.sh setup
       - name: AG round 1 (author + draft)
-        timeout-minutes: 58
+        timeout-minutes: 100
         run: bash .vault/brain/pipelines/stickman-run.sh round1
       - name: AG round 2 (fix + review + render)
-        timeout-minutes: 58
+        timeout-minutes: 100
         run: bash .vault/brain/pipelines/stickman-run.sh round2
       - name: Publish to vault
         timeout-minutes: 15
