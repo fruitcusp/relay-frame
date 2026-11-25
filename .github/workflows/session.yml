@@ -1,6 +1,9 @@
 name: session
 on:
   workflow_dispatch:
+concurrency:
+  group: ag-session
+  cancel-in-progress: false
 jobs:
   run:
     runs-on: ubuntu-latest
