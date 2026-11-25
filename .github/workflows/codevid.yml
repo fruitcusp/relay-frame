@@ -1,0 +1,56 @@
+name: codevid
+on:
+  workflow_dispatch:
+    inputs:
+      script_text:
+        description: 'Narration script (empty = built-in Vietnamese sample)'
+        required: false
+        default: ''
+        type: string
+      style:
+        description: 'Code-video style (catalog 79 subset)'
+        required: false
+        default: 've-tay'
+        type: choice
+        options:
+          - ve-tay
+          - bang-phan
+          - phang
+          - net-manh
+          - doanh-nghiep
+          - pixel
+          - bieu-do
+          - neon
+      job_id:
+        description: 'TuTaLab job id (optional, for site tracking)'
+        required: false
+        default: ''
+        type: string
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ secrets.DATA_TOKEN }}
+      DATA_TOKEN: ${{ secrets.DATA_TOKEN }}
+      VAULT_DIR: ${{ github.workspace }}/.vault
+      RUN_ID: ${{ github.run_id }}
+      CODEVID_STYLE: ${{ inputs.style }}
+      CODEVID_SCRIPT: ${{ inputs.script_text }}
+      CODEVID_JOB_ID: ${{ inputs.job_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: fruitcusp/house-data
+          token: ${{ secrets.DATA_TOKEN }}
+          path: .vault
+      - name: Setup and voice
+        timeout-minutes: 40
+        run: bash .vault/brain/pipelines/codevid-run.sh setup
+      - name: Render video
+        timeout-minutes: 60
+        run: bash .vault/brain/pipelines/codevid-run.sh render
+      - name: Publish to vault
+        timeout-minutes: 15
+        run: bash .vault/brain/pipelines/codevid-run.sh publish
