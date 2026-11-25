@@ -1,0 +1,40 @@
+name: stickman-trial
+on:
+  workflow_dispatch:
+    inputs:
+      script_text:
+        description: 'Narration script (empty = built-in Vietnamese sample)'
+        required: false
+        default: ''
+        type: string
+      style:
+        description: 'Code Engine style'
+        required: false
+        default: 'B6'
+        type: choice
+        options:
+          - B6
+          - B2
+          - B1
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: fruitcusp/house-data
+          token: ${{ secrets.DATA_TOKEN }}
+          path: .vault
+      - name: Run
+        env:
+          GH_TOKEN: ${{ secrets.DATA_TOKEN }}
+          DATA_TOKEN: ${{ secrets.DATA_TOKEN }}
+          AG_KEY: ${{ secrets.AG_KEY }}
+          VAULT_DIR: ${{ github.workspace }}/.vault
+          RUN_ID: ${{ github.run_id }}
+          STICK_STYLE: ${{ inputs.style }}
+          STICK_RATIO: '9:16'
+          STICK_SCRIPT: ${{ inputs.script_text }}
+        run: bash .vault/brain/pipelines/stickman-run.sh
