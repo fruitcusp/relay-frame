@@ -17,6 +17,14 @@ on:
         required: false
         default: '20'
         type: string
+      engine:
+        description: 'TTS engine: rust (vieneu-rs int8, default) or python (vieneu pip)'
+        required: false
+        default: 'rust'
+        type: choice
+        options:
+          - rust
+          - python
 
 jobs:
   prepare:
@@ -95,8 +103,20 @@ jobs:
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq espeak-ng ffmpeg libsndfile1
           pip install -q vieneu
+      - name: Fetch Rust dist (vieneu-rs)
+        if: inputs.engine == 'rust'
+        env:
+          GH_TOKEN: ${{ secrets.DATA_TOKEN }}
+        run: |
+          gh release download vieneu-rust-dist-20261115 -R fruitcusp/house-data -p 'vieneu-rust-dist.tar.gz' -D /tmp/rustdl
+          echo "b675e9aa3d6710046fbace5a7dc111fd598d1e2e5375bed17170f57e355f2d71  /tmp/rustdl/vieneu-rust-dist.tar.gz" | sha256sum -c -
+          mkdir -p "$GITHUB_WORKSPACE/rust-dist"
+          tar -xzf /tmp/rustdl/vieneu-rust-dist.tar.gz -C "$GITHUB_WORKSPACE/rust-dist"
+          D=$(dirname "$(find "$GITHUB_WORKSPACE/rust-dist" -name vieneu-rs -type f | head -1)")
+          echo "RUST_DIST=$D" >> "$GITHUB_ENV"
+          echo "Rust dist at: $D"
       - name: Synthesize chunk
-        run: python3 house/pipeline/tts_one.py --work work --idx ${{ matrix.idx }} --voice "${{ inputs.voice }}"
+        run: python3 house/pipeline/tts_one.py --work work --idx ${{ matrix.idx }} --voice "${{ inputs.voice }}" --engine "${{ inputs.engine }}"
       - name: Upload audio
         uses: actions/upload-artifact@v4
         with:
