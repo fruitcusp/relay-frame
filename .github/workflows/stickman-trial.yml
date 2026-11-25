@@ -16,10 +16,25 @@ on:
           - B6
           - B2
           - B1
+      job_id:
+        description: 'TuTaLab job id (optional, for site tracking)'
+        required: false
+        default: ''
+        type: string
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 350
+    timeout-minutes: 220
+    env:
+      GH_TOKEN: ${{ secrets.DATA_TOKEN }}
+      DATA_TOKEN: ${{ secrets.DATA_TOKEN }}
+      AG_KEY: ${{ secrets.AG_KEY }}
+      VAULT_DIR: ${{ github.workspace }}/.vault
+      RUN_ID: ${{ github.run_id }}
+      STICK_STYLE: ${{ inputs.style }}
+      STICK_RATIO: '9:16'
+      STICK_SCRIPT: ${{ inputs.script_text }}
+      STICK_JOB_ID: ${{ inputs.job_id }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -27,14 +42,15 @@ jobs:
           repository: fruitcusp/house-data
           token: ${{ secrets.DATA_TOKEN }}
           path: .vault
-      - name: Run
-        env:
-          GH_TOKEN: ${{ secrets.DATA_TOKEN }}
-          DATA_TOKEN: ${{ secrets.DATA_TOKEN }}
-          AG_KEY: ${{ secrets.AG_KEY }}
-          VAULT_DIR: ${{ github.workspace }}/.vault
-          RUN_ID: ${{ github.run_id }}
-          STICK_STYLE: ${{ inputs.style }}
-          STICK_RATIO: '9:16'
-          STICK_SCRIPT: ${{ inputs.script_text }}
-        run: bash .vault/brain/pipelines/stickman-run.sh
+      - name: Setup and voice
+        timeout-minutes: 30
+        run: bash .vault/brain/pipelines/stickman-run.sh setup
+      - name: AG round 1 (author + draft)
+        timeout-minutes: 58
+        run: bash .vault/brain/pipelines/stickman-run.sh round1
+      - name: AG round 2 (fix + review + render)
+        timeout-minutes: 58
+        run: bash .vault/brain/pipelines/stickman-run.sh round2
+      - name: Publish to vault
+        timeout-minutes: 15
+        run: bash .vault/brain/pipelines/stickman-run.sh publish
