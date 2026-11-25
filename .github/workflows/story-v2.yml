@@ -25,6 +25,11 @@ on:
         options:
           - rust
           - python
+      parallel:
+        description: 'Max parallel TTS jobs (8 = giờ khách, 16 = chạy lô riêng)'
+        required: false
+        default: '8'
+        type: string
 
 jobs:
   prepare:
@@ -72,10 +77,14 @@ jobs:
   tts:
     needs: prepare
     runs-on: ubuntu-latest
+    permissions:
+      packages: read
+    container:
+      image: ghcr.io/fruitcusp/tutalab-worker:latest
     strategy:
       matrix:
         idx: ${{ fromJSON(needs.prepare.outputs.matrix) }}
-      max-parallel: 20
+      max-parallel: ${{ fromJSON(inputs.parallel) }}
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
@@ -83,39 +92,14 @@ jobs:
           repository: fruitcusp/house-data
           token: ${{ secrets.DATA_TOKEN }}
           path: house
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
       - name: Download prep
         uses: actions/download-artifact@v4
         with:
           name: prep
           path: work
-      - name: Cache VieNeu
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/pip
-            ~/.cache/huggingface
-            ~/.vieneu
-          key: vieneu-cache-v1
-      - name: Install VieNeu
-        run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq espeak-ng ffmpeg libsndfile1
-          pip install -q vieneu
-      - name: Fetch Rust dist (vieneu-rs)
-        if: inputs.engine == 'rust'
-        env:
-          GH_TOKEN: ${{ secrets.DATA_TOKEN }}
-        run: |
-          gh release download vieneu-rust-dist-20261115 -R fruitcusp/house-data -p 'vieneu-rust-dist.tar.gz' -D /tmp/rustdl
-          echo "b675e9aa3d6710046fbace5a7dc111fd598d1e2e5375bed17170f57e355f2d71  /tmp/rustdl/vieneu-rust-dist.tar.gz" | sha256sum -c -
-          mkdir -p "$GITHUB_WORKSPACE/rust-dist"
-          tar -xzf /tmp/rustdl/vieneu-rust-dist.tar.gz -C "$GITHUB_WORKSPACE/rust-dist"
-          D=$(dirname "$(find "$GITHUB_WORKSPACE/rust-dist" -name vieneu-rs -type f | head -1)")
-          echo "RUST_DIST=$D" >> "$GITHUB_ENV"
-          echo "Rust dist at: $D"
       - name: Synthesize chunk
+        env:
+          RUST_DIST: /tmp/rustdist
         run: python3 house/pipeline/tts_one.py --work work --idx ${{ matrix.idx }} --voice "${{ inputs.voice }}" --engine "${{ inputs.engine }}"
       - name: Upload audio
         uses: actions/upload-artifact@v4
