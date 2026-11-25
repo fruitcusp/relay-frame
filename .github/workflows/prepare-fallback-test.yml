@@ -1,0 +1,60 @@
+name: Prepare Fallback Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      story_id:
+        description: 'Story folder in house-data/stories'
+        required: true
+        type: string
+        default: 'anh-hau-giai-nghe'
+      force_ytdlp_fail:
+        description: 'Ep yt-dlp loi (shim) de kiem tra duong du phong TikTokDownloader'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  prepare-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: fruitcusp/house-data
+          token: ${{ secrets.DATA_TOKEN }}
+          path: house
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install tools
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pip install -q yt-dlp
+      - name: Force yt-dlp failure (test only)
+        if: inputs.force_ytdlp_fail
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/shim"
+          printf '#!/bin/sh\necho "yt-dlp shim: forced failure for fallback test" >&2\nexit 1\n' > "$GITHUB_WORKSPACE/shim/yt-dlp"
+          chmod +x "$GITHUB_WORKSPACE/shim/yt-dlp"
+          echo "$GITHUB_WORKSPACE/shim" >> "$GITHUB_PATH"
+      - name: Run prepare (timed)
+        working-directory: house
+        run: |
+          echo "PREPARE_START $(date -u +%s)"
+          time python3 pipeline/prepare.py --story "${{ inputs.story_id }}" --work "$GITHUB_WORKSPACE/work"
+          echo "PREPARE_END $(date -u +%s)"
+      - name: Report evidence
+        run: |
+          echo "=== meta.json ==="
+          cat "$GITHUB_WORKSPACE/work/meta.json"
+          echo "=== source.mp4 ==="
+          ls -l "$GITHUB_WORKSPACE/work/source.mp4"
+          ffprobe -v error -show_entries stream=width,height,codec_name -show_entries format=duration,size -of default=noprint_wrappers=1 "$GITHUB_WORKSPACE/work/source.mp4"
+      - name: Upload evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: prepare-evidence
+          path: |
+            work/meta.json
+            work/source.mp4
+          retention-days: 7
