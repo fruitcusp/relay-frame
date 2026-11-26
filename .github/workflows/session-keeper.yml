@@ -1,0 +1,23 @@
+name: session-keeper
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+permissions:
+  actions: write
+  contents: read
+jobs:
+  keep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: fruitcusp/house-data
+          token: <redacted>
+          path: .vault
+      - name: Keep
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DATA_TOKEN: ${{ secrets.DATA_TOKEN }}
+        run: bash .vault/brain/pipelines/ag-keeper.sh
