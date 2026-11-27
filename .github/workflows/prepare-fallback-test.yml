@@ -14,16 +14,19 @@ on:
         type: boolean
         default: false
 
+permissions:
+  contents: read
+
 jobs:
   prepare-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: fruitcusp/house-data
           token: ${{ secrets.DATA_TOKEN }}
           path: house
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.11'
       - name: Install tools
@@ -39,9 +42,11 @@ jobs:
           echo "$GITHUB_WORKSPACE/shim" >> "$GITHUB_PATH"
       - name: Run prepare (timed)
         working-directory: house
+        env:
+          STORY_ID: ${{ inputs.story_id }}
         run: |
           echo "PREPARE_START $(date -u +%s)"
-          time python3 pipeline/prepare.py --story "${{ inputs.story_id }}" --work "$GITHUB_WORKSPACE/work"
+          time python3 pipeline/prepare.py --story "$STORY_ID" --work "$GITHUB_WORKSPACE/work"
           echo "PREPARE_END $(date -u +%s)"
       - name: Report evidence
         run: |
@@ -51,7 +56,7 @@ jobs:
           ls -l "$GITHUB_WORKSPACE/work/source.mp4"
           ffprobe -v error -show_entries stream=width,height,codec_name -show_entries format=duration,size -of default=noprint_wrappers=1 "$GITHUB_WORKSPACE/work/source.mp4"
       - name: Upload evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: prepare-evidence
           path: |

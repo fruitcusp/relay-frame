@@ -21,6 +21,9 @@ on:
         required: false
         default: ''
         type: string
+permissions:
+  contents: read
+
 jobs:
   run:
     runs-on: ubuntu-latest
@@ -36,8 +39,8 @@ jobs:
       STICK_SCRIPT: ${{ inputs.script_text }}
       STICK_JOB_ID: ${{ inputs.job_id }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: fruitcusp/house-data
           token: ${{ secrets.DATA_TOKEN }}

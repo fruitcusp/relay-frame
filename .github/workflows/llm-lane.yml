@@ -6,6 +6,9 @@ on:
         description: "Queue ID in vault (opaque)"
         required: true
         type: string
+permissions:
+  contents: read
+
 jobs:
   run:
     runs-on: ubuntu-latest
@@ -17,8 +20,8 @@ jobs:
       RUN_ID: ${{ github.run_id }}
       QUEUE_ID: ${{ inputs.queue_id }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: fruitcusp/house-data
           token: ${{ secrets.DATA_TOKEN }}

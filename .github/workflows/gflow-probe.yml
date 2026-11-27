@@ -1,6 +1,9 @@
 name: gflow-probe
 on:
   workflow_dispatch:
+permissions:
+  contents: read
+
 jobs:
   probe:
     runs-on: ubuntu-latest
@@ -12,8 +15,8 @@ jobs:
       VAULT_DIR: ${{ github.workspace }}/.vault
       RUN_ID: ${{ github.run_id }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: fruitcusp/house-data
           token: ${{ secrets.DATA_TOKEN }}
