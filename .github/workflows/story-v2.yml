@@ -142,6 +142,7 @@ jobs:
           name: final
           path: |
             work/final.mp4
+            work/final_light.mp4
             work/final_info.json
             work/meta.json
           retention-days: 90
