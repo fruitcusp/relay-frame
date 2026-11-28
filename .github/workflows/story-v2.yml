@@ -17,14 +17,6 @@ on:
         required: false
         default: '20'
         type: string
-      engine:
-        description: 'TTS engine: rust (vieneu-rs int8, default) or python (vieneu pip)'
-        required: false
-        default: 'rust'
-        type: choice
-        options:
-          - rust
-          - python
       parallel:
         description: 'Max parallel TTS jobs (8 = giờ khách, 16 = chạy lô riêng)'
         required: false
@@ -77,10 +69,6 @@ jobs:
   tts:
     needs: prepare
     runs-on: ubuntu-latest
-    permissions:
-      packages: read
-    container:
-      image: ghcr.io/fruitcusp/tutalab-worker:latest
     strategy:
       matrix:
         idx: ${{ fromJSON(needs.prepare.outputs.matrix) }}
@@ -92,20 +80,25 @@ jobs:
           repository: fruitcusp/house-data
           token: ${{ secrets.DATA_TOKEN }}
           path: house
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install ffmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
       - name: Download prep
         uses: actions/download-artifact@v4
         with:
           name: prep
           path: work
-      - name: Synthesize chunk
-        env:
-          RUST_DIST: /tmp/rustdist
-        run: python3 house/pipeline/tts_one.py --work work --idx ${{ matrix.idx }} --voice "${{ inputs.voice }}" --engine "${{ inputs.engine }}"
+      - name: Synthesize chunk via TuTaLab API (be am VieNeu duy nhat)
+        run: python3 house/pipeline/tts_api.py --work work --idx ${{ matrix.idx }} --voice "${{ inputs.voice }}"
       - name: Upload audio
         uses: actions/upload-artifact@v4
         with:
           name: audio-${{ matrix.idx }}
-          path: work/audio-*.wav
+          path: |
+            work/audio-*.wav
+            work/cues/cue-*.json
 
   compose:
     needs: tts
